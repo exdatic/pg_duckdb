@@ -288,8 +288,13 @@ DuckDBManager::InstallExtensions(duckdb::ClientContext &context) {
 }
 
 static std::string
-DisabledFileSystems() {
-	if (pgduckdb::pg::AllowRawFileAccess()) {
+DisabledFileSystems(bool external_access) {
+	/*
+	 * With external access off, DuckDB refuses every file a query names, yet
+	 * still spills to its temporary directory through LocalFileSystem, which
+	 * disabling it would take away too.
+	 */
+	if (pgduckdb::pg::AllowRawFileAccess() || !external_access) {
 		return duckdb_disabled_filesystems;
 	}
 
@@ -311,7 +316,8 @@ DisabledFileSystems() {
 
 void
 DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
-	std::string disabled_filesystems = DisabledFileSystems();
+	std::string disabled_filesystems =
+	    DisabledFileSystems(duckdb::DBConfig::GetConfig(context).options.enable_external_access);
 	if (disabled_filesystems != "") {
 		/*
 		 * DuckDB does not allow us to disable this setting on the
