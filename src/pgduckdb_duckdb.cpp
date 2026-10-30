@@ -1,6 +1,8 @@
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 
+#include <cerrno>
 #include <filesystem>
+#include <signal.h>
 
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
@@ -88,6 +90,41 @@ ToString(char *value) {
 	config.options.ddb_option_name = duckdb_##ddb_option_name;                                                         \
 	elog(DEBUG2, "[PGDuckDB] Set DuckDB option: '" #ddb_option_name "'=%s", ToString(duckdb_##ddb_option_name).c_str());
 
+/*
+ * The directory this backend's DuckDB instance spills to. Each backend runs an
+ * instance of its own, and DuckDB names its temporary files alike in every
+ * instance and deletes them all when it closes: a directory shared by the
+ * backends would mix their spills. DuckDB creates the directory on the first
+ * spill and deletes a query's files when the query ends; the empty directory
+ * stays until a backend starting later removes it.
+ */
+static std::string
+BackendTemporaryDirectory() {
+	return std::string(duckdb_temporary_directory) + "/" + std::to_string(MyProcPid);
+}
+
+/*
+ * Removes the temporary directories of backends that are gone, and this
+ * backend's own if one is there: a backend that crashed or was killed leaves
+ * its files behind, and its process id can come round again.
+ */
+static void
+RemoveStaleTemporaryDirectories() {
+	std::error_code error;
+	std::filesystem::directory_iterator entry(duckdb_temporary_directory, error), end;
+	for (; !error && entry != end; entry.increment(error)) {
+		std::string name = entry->path().filename().string();
+		if (name.empty() || name.size() > 9 || name.find_first_not_of("0123456789") != std::string::npos) {
+			continue;
+		}
+		int pid = std::stoi(name);
+		if (pid == MyProcPid || (kill(pid, 0) != 0 && errno == ESRCH)) {
+			std::error_code ignored;
+			std::filesystem::remove_all(entry->path(), ignored);
+		}
+	}
+}
+
 void
 DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
@@ -98,6 +135,7 @@ DuckDBManager::Initialize() {
 	// Make sure directories provided in config exists
 	std::filesystem::create_directories(duckdb_temporary_directory);
 	std::filesystem::create_directories(duckdb_extension_directory);
+	RemoveStaleTemporaryDirectories();
 
 	duckdb::DBConfig config;
 	std::string user_agent = "pg_duckdb";
@@ -127,7 +165,9 @@ DuckDBManager::Initialize() {
 	SET_DUCKDB_OPTION(allow_community_extensions);
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
-	SET_DUCKDB_OPTION(temporary_directory);
+	config.options.temporary_directory = BackendTemporaryDirectory();
+	elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'temporary_directory'=%s",
+	     config.options.temporary_directory.c_str());
 	SET_DUCKDB_OPTION(extension_directory);
 
 	if (duckdb_maximum_memory > 0) {
