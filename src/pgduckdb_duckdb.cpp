@@ -115,6 +115,15 @@ DuckDBManager::Initialize() {
 
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);
 	SET_DUCKDB_OPTION(enable_external_access);
+	/*
+	 * pg_duckdb keeps its secrets in Postgres and hands them to DuckDB as
+	 * temporary ones. DuckDB still reads its directory of persistent secrets
+	 * when a query first needs one, which external access off refuses: every
+	 * query would fail.
+	 */
+	if (!duckdb_enable_external_access) {
+		config.SetOptionByName("allow_persistent_secrets", duckdb::Value::BOOLEAN(false));
+	}
 	SET_DUCKDB_OPTION(allow_community_extensions);
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
