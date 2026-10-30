@@ -1,3 +1,19 @@
+# 1.1.1-duckdb1.4.5 (2026-10-30)
+
+1.1.1 on a newer DuckDB, with fixes for running with `duckdb.enable_external_access` off.
+
+## Changed
+
+- Update to DuckDB v1.4.5.
+
+## Fixed
+
+- Let users other than superusers spill to disk while `duckdb.enable_external_access` is off. ([#864])
+- Spill into a temporary directory per backend, so parallel queries keep their files apart, and remove the directories of backends that have ended.
+- Turn persistent secrets off while `duckdb.enable_external_access` is off. DuckDB v1.4.5 reads its secrets directory on the first query, which external access off refuses, so every query failed.
+
+[#864]: https://github.com/duckdb/pg_duckdb/issues/864
+
 # 1.1.1 (2025-12-16)
 
 ## Changed
