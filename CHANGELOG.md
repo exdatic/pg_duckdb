@@ -1,3 +1,13 @@
+# 1.2.2-scienceos (2026-11-24)
+
+1.2.2 with a fix for running with `duckdb.enable_external_access` off.
+
+## Fixed
+
+- Let users other than superusers spill to disk while `duckdb.enable_external_access` is off. ([#864])
+
+[#864]: https://github.com/duckdb/pg_duckdb/issues/864
+
 # 1.2.2 (2026-11-23)
 
 ## Added
