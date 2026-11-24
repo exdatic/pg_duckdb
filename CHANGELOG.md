@@ -1,4 +1,4 @@
-# 1.2.2-scienceos (2026-11-24)
+# 1.2.2-duckdb2.0.1 (2026-11-24)
 
 1.2.2 with a fix for running with `duckdb.enable_external_access` off.
 
